@@ -6,7 +6,7 @@ set -f
 set -u
 set -e
 
-if [ $# != 0 ]; then
+if [[ $# != 0 ]]; then
     echo "Download and install zoom package. Abort if it does not supersede currently installed version."
     echo "Usage: $0"
     exit 1
@@ -33,8 +33,8 @@ curl --fail --silent --show-error --location "https://zoom.us/client/latest/zoom
 downloadpid=$!
 
 # Figure out currently installed version
-v0="$(apt-cache policy zoom | egrep '  Installed: ' | cut --delimiter=: --field=2 | tr -d ' ')"
-if [ -n "${v0}" ]; then
+v0="$(dpkg-query -W -f='${Version}' zoom 2>/dev/null || true)"
+if [[ -n "${v0}" ]]; then
     echo "info: current zoom version ${v0}"
 else
     echo "info: zoom not currently installed"
