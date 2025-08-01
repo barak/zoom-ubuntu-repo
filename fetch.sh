@@ -4,9 +4,9 @@ set -f
 set -u
 set -e
 
-if [ $# = 0 ]; then
+if [[ $# = 0 ]]; then
     version="latest"
-elif [ $# = 1 -a -n "$1" ]; then
+elif [[ $# = 1 -a -n "$1" ]]; then
     version="$1"
 else
     echo "Usage: $0 [version]"
@@ -37,7 +37,7 @@ echo "info: downloading zoom package has version ${v}"
 
 target="zoom_${v}_${arch}.deb"
 
-if [ -e "${target}" ]; then
+if [[ -e "${target}" ]]; then
     echo "info: aborting download, ${target} already exists."
     kill ${downloadpid}
     wait -f ${downloadpid} || true
@@ -58,10 +58,10 @@ else
 fi
 
 # install downloaded or existing package if appropriate
-v0="$(apt-cache policy zoom | egrep '  Installed: ' | cut --delimiter=: --field=2 | tr -d ' ')"
+v0="$(dpkg-query -W -f='${Version}' zoom 2>/dev/null || true)"
 if dpkg --compare-versions "${v0}" lt "${v}"; then
     read -p "install zoom ${v} over ${v0} [Y]? " a
-    if [ -z "${a}" ] ; then
+    if [[ -z "${a}" ]] ; then
 	sudo dpkg --install "${target}"
     fi
 else
