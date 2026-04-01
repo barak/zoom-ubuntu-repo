@@ -6,9 +6,18 @@ set -f
 set -u
 set -e
 
+full_download=false
+
+if [[ $# -ge 1 && "$1" == "-f" ]]; then
+    full_download=true
+    shift
+fi
+
 if [[ $# != 0 ]]; then
-    echo "Download and install zoom package. Abort if it does not supersede currently installed version."
-    echo "Usage: $0"
+    echo "Usage: $0 [-f]"
+    echo "Download and install zoom package."
+    echo "Abort if it does not supersede currently installed version."
+    echo "Streams and aborts early by default; -f always downloads fully."
     exit 1
 fi
 
@@ -40,19 +49,31 @@ else
     echo "info: zoom not currently installed"
 fi
 
-# Snuffle through downloading file to extract version:
-v="$(dpkg --field <(tail --retry --follow --pid=${downloadpid} --bytes=+0 "${deb_name}" 2>/dev/null) Version)"
+if [[ "${full_download}" == true ]]; then
+    # Wait for download to complete then extract version:
+    wait -f ${downloadpid} || true
+    v="$(dpkg --field ${deb_name} Version)"
+else
+    # Snuffle through downloading file to extract version:
+    v="$(dpkg --field <(tail --retry --follow --pid=${downloadpid} --bytes=+0 "${deb_name}" 2>/dev/null) Version)"
+fi
 echo "info: available zoom version ${v}"
 
 # install downloaded or existing package if appropriate
 if dpkg --compare-versions "${v0}" lt "${v}"; then
-    echo "info: waiting for download to complete"
-    wait -f ${downloadpid} || true
+    if [[ "${full_download}" == false ]]; then
+	echo "info: waiting for download to complete"
+	wait -f ${downloadpid} || true
+    fi
     # This would be a good place to check the integrity of ${deb_name}
     # because an error in the downloading process, like a network fault,
     # could result in a truncated or corrupt file.
     sudo apt install "${deb_name}"
 else
+    echo "info: skipping installation"
+fi
+
+if [[ "${full_download}" == false ]]; then
     echo -n "info: aborting download ..."
     kill ${downloadpid}
     wait -f ${downloadpid} || true
