@@ -42,9 +42,9 @@ while True:
         with tarfile.open(fileobj=src, mode=mode) as tf:
             for m in tf:
                 if m.name.lstrip('./') == 'control':
-                    for line in tf.extractfile(m).read().decode().splitlines():
-                        if line.startswith('Version:'):
-                            print(line[8:].strip())
+                    for line in tf.extractfile(m):
+                        if line.startswith(b'Version:'):
+                            print(line[8:].strip().decode())
                             sys.exit(0)
                     sys.exit('Version not found')
         sys.exit('control not found in control.tar')
