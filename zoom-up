@@ -55,7 +55,24 @@ if [[ "${full_download}" == true ]]; then
     v="$(dpkg --field ${deb_name} Version)"
 else
     # Snuffle through downloading file to extract version:
-    v="$(dpkg --field <(tail --retry --follow --pid=${downloadpid} --bytes=+0 "${deb_name}" 2>/dev/null) Version)"
+    if false; then
+	v="$(dpkg --field <(tail --retry --follow --pid=${downloadpid} --bytes=+0 "${deb_name}" 2>/dev/null) Version)"
+	#v="$(./dpkg-version.py <(tail --retry --follow --pid=${downloadpid} --bytes=+0 "${deb_name}" 2>/dev/null))"
+    else
+	read offset controlfile <<< "$(tail --retry --follow --pid=${downloadpid} --bytes=+0 "${deb_name}" 2>/dev/null \
+	 | ./dpkg-control-offset.py)"
+
+	echo "info: offset ${offset}"
+	echo "info: controlfile ${controlfile}"
+	ext="${controlfile##*.}"
+	echo "info: ext ${ext}"
+
+	v="$(tail --retry --follow --pid=${downloadpid} --bytes=+${offset} "${deb_name}" 2>/dev/null \
+	     | tar --${ext} --file=- --to-stdout --extract ./control 2>/dev/null \
+ 	     | grep '^Version:' \
+ 	     | head -1 \
+ 	     | cut --delimiter=' ' --field=2)"
+    fi
 fi
 echo "info: available zoom version ${v}"
 
