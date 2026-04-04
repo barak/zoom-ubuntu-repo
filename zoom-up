@@ -6,18 +6,10 @@ set -f
 set -u
 set -e
 
-full_download=false
-
-if [[ $# -ge 1 && "$1" == "-f" ]]; then
-    full_download=true
-    shift
-fi
-
 if [[ $# != 0 ]]; then
-    echo "Usage: $0 [-f]"
     echo "Download and install zoom package."
     echo "Abort if it does not supersede currently installed version."
-    echo "Streams and aborts early by default; -f always downloads fully."
+    echo "Streams and aborts early."
     exit 1
 fi
 
@@ -49,39 +41,37 @@ else
     echo "info: zoom not currently installed"
 fi
 
-if [[ "${full_download}" == true ]]; then
-    # Wait for download to complete then extract version:
-    wait -f ${downloadpid} || true
-    v="$(dpkg --field ${deb_name} Version)"
+# Snuffle through downloading file to extract version:
+if v="$(dpkg --field <(tail --retry --follow --pid=${downloadpid} --bytes=+0 "${deb_name}" 2>/dev/null) Version 2>/dev/null)"; then
+    echo "info: dpkg can handle streaming"
 else
-    # Snuffle through downloading file to extract version:
-    if false; then
-	v="$(dpkg --field <(tail --retry --follow --pid=${downloadpid} --bytes=+0 "${deb_name}" 2>/dev/null) Version)"
-	#v="$(./dpkg-version.py <(tail --retry --follow --pid=${downloadpid} --bytes=+0 "${deb_name}" 2>/dev/null))"
-    else
-	read offset controlfile <<< "$(tail --retry --follow --pid=${downloadpid} --bytes=+0 "${deb_name}" 2>/dev/null \
-	 | ./dpkg-control-offset.py)"
+    echo "info: dpkg cannot handle streaming"
+    read offset controlfile <<< "$(tail --retry --follow --pid=${downloadpid} --bytes=+0 "${deb_name}" 2>/dev/null \
+    	 | python3 -c '
+import sys; f=sys.stdin.buffer
+assert f.read(8)==b"!<arch>\n"; off=8
+while True:
+    h=f.read(60); name=h[:16].rstrip(b" /").decode(); size=int(h[48:58])
+    if name.startswith("control.tar"): print(off+60+1, name); break
+    f.read(size+size%2); off+=60+size+size%2
+')"
+    echo "info: offset ${offset}"
+    echo "info: controlfile ${controlfile}"
+    ext="${controlfile##*.}"
+    echo "info: ext ${ext}"
 
-	echo "info: offset ${offset}"
-	echo "info: controlfile ${controlfile}"
-	ext="${controlfile##*.}"
-	echo "info: ext ${ext}"
-
-	v="$(tail --retry --follow --pid=${downloadpid} --bytes=+${offset} "${deb_name}" 2>/dev/null \
-	     | tar --${ext} --file=- --to-stdout --extract ./control 2>/dev/null \
+    v="$(tail --retry --follow --pid=${downloadpid} --bytes=+${offset} "${deb_name}" 2>/dev/null \
+    	     | tar --${ext} --file=- --to-stdout --extract ./control 2>/dev/null \
  	     | grep '^Version:' \
  	     | head -1 \
  	     | cut --delimiter=' ' --field=2)"
-    fi
 fi
 echo "info: available zoom version ${v}"
 
 # install downloaded or existing package if appropriate
 if dpkg --compare-versions "${v0}" lt "${v}"; then
-    if [[ "${full_download}" == false ]]; then
-	echo "info: waiting for download to complete"
-	wait -f ${downloadpid} || true
-    fi
+    echo "info: waiting for download to complete"
+    wait -f ${downloadpid} || true
     # This would be a good place to check the integrity of ${deb_name}
     # because an error in the downloading process, like a network fault,
     # could result in a truncated or corrupt file.
@@ -90,11 +80,9 @@ else
     echo "info: skipping installation"
 fi
 
-if [[ "${full_download}" == false ]]; then
-    echo -n "info: aborting download ..."
-    kill ${downloadpid}
-    wait -f ${downloadpid} || true
-    echo " aborted after $(wc -c < "${deb_name}") bytes"
-fi
+echo -n "info: aborting download ..."
+kill ${downloadpid}
+wait -f ${downloadpid} || true
+echo " aborted after $(wc -c < "${deb_name}") bytes"
 
 rm -f "${deb_name}"
