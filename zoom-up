@@ -78,11 +78,10 @@ if dpkg --compare-versions "${v0}" lt "${v}"; then
     sudo apt install "${deb_name}"
 else
     echo "info: skipping installation"
+    echo -n "info: aborting download ..."
+    kill ${downloadpid}
+    wait -f ${downloadpid} || true
+    echo " aborted after $(wc -c < "${deb_name}") bytes"
 fi
-
-echo -n "info: aborting download ..."
-kill ${downloadpid}
-wait -f ${downloadpid} || true
-echo " aborted after $(wc -c < "${deb_name}") bytes"
 
 rm -f "${deb_name}"
