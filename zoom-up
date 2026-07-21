@@ -79,7 +79,7 @@ if dpkg --compare-versions "${v0}" lt "${v}"; then
 else
     echo "info: skipping installation"
     echo -n "info: aborting download ..."
-    kill ${downloadpid}
+    kill ${downloadpid} || true
     wait -f ${downloadpid} || true
     echo " aborted after $(wc -c < "${deb_name}") bytes"
 fi
